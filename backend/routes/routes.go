@@ -4,11 +4,21 @@ import (
 	"backend/internal/handler"
 	"backend/internal/middleware"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
+
+	// Konfigurasi CORS agar frontend (Port 5173 / 5174) bisa mengakses backend
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:5174"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 
 	api := r.Group("/api/v1")
 	{
@@ -27,13 +37,11 @@ func SetupRouter() *gin.Engine {
 			userGroup.Use(middleware.RequireRole("USER"))
 			{
 				userGroup.GET("/dashboard", handler.GetUserDashboard)
-
 				userGroup.GET("/tasks", handler.GetTasks)
 				userGroup.GET("/tasks/:id", handler.GetTaskByID)
 				userGroup.POST("/tasks", handler.CreateTask)
 				userGroup.PUT("/tasks/:id", handler.UpdateTask)
 				userGroup.DELETE("/tasks/:id", handler.DeleteTask)
-
 				userGroup.GET("/categories", handler.GetCategories)
 				userGroup.GET("/categories/:id", handler.GetCategoryByID)
 				userGroup.POST("/categories", handler.CreateCategory)
@@ -52,6 +60,7 @@ func SetupRouter() *gin.Engine {
 				adminGroup.PATCH("/users/:id/status", handler.UpdateUserStatus)
 				adminGroup.GET("/tasks", handler.GetAdminTasks)
 				adminGroup.GET("/tasks/:id", handler.GetAdminTaskByID)
+				adminGroup.GET("/tasks/export", handler.ExportAdminTasksCSV)
 			}
 		}
 	}

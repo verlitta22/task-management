@@ -1,127 +1,348 @@
 import React, { useEffect, useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../services/api';
-import { motion } from 'framer-motion';
-import { Users, UserCheck, UserX, Shield, CheckSquare } from 'lucide-react';
+import { Users, Shield, CheckSquare, Clock, LogOut, Search, Download } from 'lucide-react';
 
 export default function AdminDashboard() {
-    const [stats, setStats] = useState({
-        users: { total: 0, active: 0, inactive: 0, admins: 0 },
-        tasks: { total: 0, status_counts: { TODO: 0, IN_PROGRESS: 0, DONE: 0 } }
-    });
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const [stats, setStats] = useState({ total_users: 0, active_users: 0, inactive_users: 0, admin_count: 0, total_tasks: 0, status_summary: { TODO: 0, IN_PROGRESS: 0, DONE: 0 } });
+    const [users, setUsers] = useState([]);
+    const [tasks, setTasks] = useState([]);
+    const [activeTab, setActiveTab] = useState('users'); // 'users' atau 'tasks'
+    const [searchQuery, setSearchQuery] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+
+    // State tambahan untuk Pagination & Search Task di Admin
+    const [taskPage, setTaskPage] = useState(1);
+    const [taskTotalPages, setTaskTotalPages] = useState(1);
+    const [taskSearch, setTaskSearch] = useState('');
+
+    const navigate = useNavigate();
+
+    const fetchAdminData = async () => {
+        try {
+            setLoading(true);
+            const dashboardRes = await apiRequest('/admin/dashboard');
+            const usersRes = await apiRequest('/admin/users');
+            
+            setStats(dashboardRes.stats || stats);
+            setUsers(usersRes.data || []);
+        } catch (err) {
+            setError(err.message || 'Gagal memuat data admin');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchAdminTasks = async (page = 1, search = '') => {
+        try {
+            setLoading(true);
+            const tasksRes = await apiRequest(`/admin/tasks?page=${page}&limit=5&search=${search}`);
+            setTasks(tasksRes.data || []);
+            setTaskTotalPages(tasksRes.total_pages || 1);
+            setTaskPage(tasksRes.page || 1);
+        } catch (err) {
+            setError(err.message || 'Gagal memuat monitoring task');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        async function fetchAdminStats() {
-            try {
-                const res = await apiRequest('/admin/dashboard');
-                setStats(res);
-            } catch (err) {
-                console.error(err);
-            }
-        }
-        fetchAdminStats();
+        fetchAdminData();
     }, []);
 
+    useEffect(() => {
+        if (activeTab === 'tasks') {
+            fetchAdminTasks(taskPage, taskSearch);
+        }
+    }, [activeTab, taskPage, taskSearch]);
+
+    const handleToggleStatus = async (userId, currentStatus) => {
+        try {
+            await apiRequest(`/admin/users/${userId}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ is_active: !currentStatus })
+            });
+            setSuccessMessage('Status akun berhasil diubah');
+            fetchAdminData();
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const handleToggleRole = async (userId, currentRole) => {
+        const newRole = currentRole === 'ADMIN' ? 'USER' : 'ADMIN';
+        if (!window.confirm(`Ubah role user ini menjadi ${newRole}?`)) return;
+
+        try {
+            await apiRequest(`/admin/users/${userId}/role`, {
+                method: 'PATCH',
+                body: JSON.stringify({ role: newRole })
+            });
+            setSuccessMessage('Role user berhasil diubah');
+            fetchAdminData();
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const handleExportCSV = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://localhost:8080/api/v1/admin/tasks/export', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Gagal mengunduh laporan CSV');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'laporan_tasks_admin.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(err.message || 'Gagal mengunduh laporan CSV');
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+    };
+
+    const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+
     return (
-        <DashboardLayout>
-            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <div className="mb-8">
-                    <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Admin Global Dashboard 🛡️</h2>
-                    <p className="text-gray-500 mt-1">Halo {user.name}, berikut adalah statistik global dan monitoring sistem.</p>
+        <div className="min-h-screen bg-[#F7F5F0] p-6 font-sans">
+            {/* Header */}
+            <header className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm mb-6 border border-gray-100">
+                <div>
+                    <h1 className="text-2xl font-extrabold text-gray-900">Dashboard Administrator</h1>
+                    <p className="text-sm text-gray-500">Pusat kendali dan monitoring sistem Task Management v2.</p>
                 </div>
+                <button onClick={handleLogout} className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-600 rounded-2xl font-bold text-sm hover:bg-red-100 transition">
+                    <LogOut size={16} />
+                    <span>Keluar</span>
+                </button>
+            </header>
 
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Statistik Pengguna Sistem</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total User</span>
-                            <div className="p-2 bg-gray-100 rounded-2xl text-gray-700"><Users size={20} /></div>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.users.total}</h3>
-                            <p className="text-xs text-gray-400 mt-1">Akun terdaftar</p>
-                        </div>
-                    </div>
+            {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm font-medium">{error}</div>}
+            {successMessage && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-600 rounded-2xl text-sm font-medium">{successMessage}</div>}
 
-                    <div className="bg-[#D1F7C4] p-6 rounded-3xl shadow-sm border border-green-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-green-800">User Aktif</span>
-                            <div className="p-2 bg-white/60 rounded-2xl text-green-800"><UserCheck size={20} /></div>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.users.active}</h3>
-                            <p className="text-xs text-green-900/70 mt-1">Dapat mengakses aplikasi</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#FBE2F3] p-6 rounded-3xl shadow-sm border border-pink-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-pink-800">User Nonaktif</span>
-                            <div className="p-2 bg-white/60 rounded-2xl text-pink-800"><UserX size={20} /></div>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.users.inactive}</h3>
-                            <p className="text-xs text-pink-900/70 mt-1">Akun dinonaktifkan</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#D8E7FE] p-6 rounded-3xl shadow-sm border border-blue-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-blue-800">Total Admin</span>
-                            <div className="p-2 bg-white/60 rounded-2xl text-blue-800"><Shield size={20} /></div>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.users.admins}</h3>
-                            <p className="text-xs text-blue-900/70 mt-1">Pengelola sistem</p>
-                        </div>
+            {/* Global Stats Bento Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                    <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><Users size={24} /></div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Total User</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.total_users}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">{stats.active_users} Aktif / {stats.inactive_users} Nonaktif</p>
                     </div>
                 </div>
-
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Statistik Global Task Lintas User</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="bg-[#141414] text-white p-6 rounded-3xl shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Sistem Task</span>
-                            <div className="p-2 bg-gray-800 rounded-2xl text-white"><CheckSquare size={20} /></div>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-white">{stats.tasks.total}</h3>
-                            <p className="text-xs text-gray-400 mt-1">Keseluruhan task</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#FDF2B3] p-6 rounded-3xl shadow-sm border border-yellow-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-yellow-800">Global TODO</span>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.tasks.status_counts.TODO || 0}</h3>
-                            <p className="text-xs text-yellow-900/70 mt-1">Status TODO</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#D8E7FE] p-6 rounded-3xl shadow-sm border border-blue-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-blue-800">Global In Progress</span>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.tasks.status_counts.IN_PROGRESS || 0}</h3>
-                            <p className="text-xs text-blue-900/70 mt-1">Status In Progress</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#D1F7C4] p-6 rounded-3xl shadow-sm border border-green-200/50 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold uppercase tracking-wider text-green-800">Global Done</span>
-                        </div>
-                        <div className="mt-6">
-                            <h3 className="text-4xl font-extrabold text-gray-900">{stats.tasks.status_counts.DONE || 0}</h3>
-                            <p className="text-xs text-green-900/70 mt-1">Status Done</p>
-                        </div>
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                    <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl"><Shield size={24} /></div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Jumlah Admin</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.admin_count}</h3>
                     </div>
                 </div>
-            </motion.div>
-        </DashboardLayout>
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                    <div className="p-4 bg-yellow-50 text-yellow-600 rounded-2xl"><CheckSquare size={24} /></div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Total Task Sistem</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.total_tasks}</h3>
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                    <div className="p-4 bg-green-50 text-green-600 rounded-2xl"><Clock size={24} /></div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Selesai (Done)</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.status_summary.DONE}</h3>
+                    </div>
+                </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex space-x-4 mb-6">
+                <button 
+                    onClick={() => setActiveTab('users')}
+                    className={`px-6 py-3 rounded-2xl font-bold text-sm transition shadow-sm ${activeTab === 'users' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                >
+                    Kelola Pengguna
+                </button>
+                <button 
+                    onClick={() => setActiveTab('tasks')}
+                    className={`px-6 py-3 rounded-2xl font-bold text-sm transition shadow-sm ${activeTab === 'tasks' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                >
+                    Monitoring Semua Task
+                </button>
+            </div>
+
+            {/* Content Section */}
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                {activeTab === 'users' ? (
+                    <div>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-extrabold text-gray-900">Daftar Pengguna Terdaftar</h3>
+                            <div className="relative w-72">
+                                <Search className="absolute left-4 top-3 text-gray-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Cari nama atau email..." 
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-11 pr-4 py-2.5 bg-[#F7F5F0] rounded-2xl text-sm border-none focus:ring-2 focus:ring-black outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <p className="text-sm text-gray-400 text-center py-8">Memuat data pengguna...</p>
+                        ) : filteredUsers.length === 0 ? (
+                            <p className="text-sm text-gray-400 text-center py-8">Tidak ada pengguna ditemukan.</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                                            <th className="pb-4 font-bold">Nama</th>
+                                            <th className="pb-4 font-bold">Email</th>
+                                            <th className="pb-4 font-bold">Role</th>
+                                            <th className="pb-4 font-bold">Status</th>
+                                            <th className="pb-4 font-bold text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50 text-sm">
+                                        {filteredUsers.map((u) => (
+                                            <tr key={u.id} className="hover:bg-[#F7F5F0]/50 transition">
+                                                <td className="py-4 font-bold text-gray-900">{u.name}</td>
+                                                <td className="py-4 text-gray-500">{u.email}</td>
+                                                <td className="py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {u.role}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {u.is_active ? 'Aktif' : 'Nonaktif'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 text-right space-x-2">
+                                                    <button 
+                                                        onClick={() => handleToggleRole(u.id, u.role)}
+                                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+                                                    >
+                                                        Ubah Role
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleToggleStatus(u.id, u.is_active)}
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${u.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                                                    >
+                                                        {u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div>
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                            <h3 className="text-lg font-extrabold text-gray-900">Monitoring Seluruh Task (Read-Only)</h3>
+                            <div className="flex items-center space-x-3 w-full md:w-auto">
+                                <div className="relative w-72">
+                                    <Search className="absolute left-4 top-3 text-gray-400" size={18} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Cari task atau nama user..." 
+                                        value={taskSearch}
+                                        onChange={(e) => {
+                                            setTaskSearch(e.target.value);
+                                            setTaskPage(1);
+                                        }}
+                                        className="w-full pl-11 pr-4 py-2.5 bg-[#F7F5F0] rounded-2xl text-sm border-none focus:ring-2 focus:ring-black outline-none"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleExportCSV}
+                                    className="flex items-center space-x-2 px-4 py-2.5 bg-black text-white rounded-2xl font-bold text-sm hover:bg-gray-800 transition shadow-md"
+                                >
+                                    <Download size={16} />
+                                    <span>Unduh CSV</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <p className="text-sm text-gray-400 text-center py-8">Memuat monitoring task...</p>
+                        ) : tasks.length === 0 ? (
+                            <p className="text-sm text-gray-400 text-center py-8">Belum ada task di dalam sistem.</p>
+                        ) : (
+                            <div>
+                                <div className="space-y-4 mb-6">
+                                    {tasks.map((t) => (
+                                        <div key={t.id} className="flex items-center justify-between p-4 bg-[#F7F5F0] rounded-2xl border border-transparent">
+                                            <div>
+                                                <div className="flex items-center space-x-2">
+                                                    <h4 className="font-bold text-gray-900 text-sm">{t.title}</h4>
+                                                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-md font-medium">Oleh: {t.user_name}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">{t.description || 'Tidak ada deskripsi'}</p>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                    t.status === 'DONE' ? 'bg-green-100 text-green-700' :
+                                                    t.status === 'IN_PROGRESS' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700'
+                                                }`}>
+                                                    {t.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Pagination Controls */}
+                                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                                    <p className="text-xs text-gray-500 font-medium">Halaman {taskPage} dari {taskTotalPages}</p>
+                                    <div className="flex space-x-2">
+                                        <button 
+                                            disabled={taskPage <= 1}
+                                            onClick={() => setTaskPage(prev => Math.max(prev - 1, 1))}
+                                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold disabled:opacity-50 hover:bg-gray-200 transition"
+                                        >
+                                            Sebelumnya
+                                        </button>
+                                        <button 
+                                            disabled={taskPage >= taskTotalPages}
+                                            onClick={() => setTaskPage(prev => prev + 1)}
+                                            className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold disabled:opacity-50 hover:bg-gray-800 transition"
+                                        >
+                                            Selanjutnya
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
