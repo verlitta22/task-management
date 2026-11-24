@@ -1,36 +1,22 @@
 package handler
 
 import (
-	"backend/config"
-	"backend/internal/model"
-	"database/sql"
+	"backend/internal/repository"
+	"backend/internal/service"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
+var categoryService = service.NewCategoryService(repository.NewCategoryRepository())
+
 func GetCategories(c *gin.Context) {
 	userID := c.MustGet("user_id").(int)
 
-	rows, err := config.DB.Query("SELECT id, name, created_at, updated_at FROM categories WHERE user_id = ? ORDER BY created_at DESC", userID)
+	categories, err := categoryService.GetCategories(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data kategori"})
-		return
-	}
-	defer rows.Close()
-
-	var categories []model.Category
-	for rows.Next() {
-		var cat model.Category
-		if err := rows.Scan(&cat.ID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt); err != nil {
-			continue
-		}
-		cat.UserID = userID
-		categories = append(categories, cat)
-	}
-
-	if err = rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kesalahan saat membaca daftar kategori"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -39,20 +25,18 @@ func GetCategories(c *gin.Context) {
 
 func GetCategoryByID(c *gin.Context) {
 	userID := c.MustGet("user_id").(int)
-	catID := c.Param("id")
+	catID, _ := strconv.Atoi(c.Param("id"))
 
-	var cat model.Category
-	err := config.DB.QueryRow("SELECT id, name, created_at, updated_at FROM categories WHERE id = ? AND user_id = ?", catID, userID).
-		Scan(&cat.ID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt)
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil detail kategori"})
+	cat, err := categoryService.GetCategoryByID(catID, userID)
+	if err != nil {
+		code := http.StatusInternalServerError
+		if err.Error() == "kategori tidak ditemukan" {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 
-	cat.UserID = userID
 	c.JSON(http.StatusOK, gin.H{"data": cat})
 }
 
@@ -68,9 +52,9 @@ func CreateCategory(c *gin.Context) {
 		return
 	}
 
-	_, err := config.DB.Exec("INSERT INTO categories (name, user_id) VALUES (?, ?)", input.Name, userID)
+	err := categoryService.CreateCategory(input.Name, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat kategori baru"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -79,7 +63,7 @@ func CreateCategory(c *gin.Context) {
 
 func UpdateCategory(c *gin.Context) {
 	userID := c.MustGet("user_id").(int)
-	catID := c.Param("id")
+	catID, _ := strconv.Atoi(c.Param("id"))
 
 	var input struct {
 		Name string `json:"name" binding:"required"`
@@ -90,15 +74,13 @@ func UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	res, err := config.DB.Exec("UPDATE categories SET name = ? WHERE id = ? AND user_id = ?", input.Name, catID, userID)
+	err := categoryService.UpdateCategory(input.Name, catID, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui kategori"})
-		return
-	}
-
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
+		code := http.StatusInternalServerError
+		if err.Error() == "kategori tidak ditemukan" {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -107,17 +89,15 @@ func UpdateCategory(c *gin.Context) {
 
 func DeleteCategory(c *gin.Context) {
 	userID := c.MustGet("user_id").(int)
-	catID := c.Param("id")
+	catID, _ := strconv.Atoi(c.Param("id"))
 
-	res, err := config.DB.Exec("DELETE FROM categories WHERE id = ? AND user_id = ?", catID, userID)
+	err := categoryService.DeleteCategory(catID, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus kategori"})
-		return
-	}
-
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
+		code := http.StatusInternalServerError
+		if err.Error() == "kategori tidak ditemukan" {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 

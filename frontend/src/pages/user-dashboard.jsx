@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../services/api';
 import { LayoutDashboard, CheckSquare, Clock, AlertCircle, Plus, LogOut, Calendar, Edit, Trash2 } from 'lucide-react';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
+import toast, { Toaster } from 'react-hot-toast';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function UserDashboard() {
     const [stats, setStats] = useState({ total: 0, todo: 0, in_progress: 0, done: 0 });
     const [tasks, setTasks] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
     
     // State untuk Modal & Form Tambah / Edit Task
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,6 +31,22 @@ export default function UserDashboard() {
     const [filterCategory, setFilterCategory] = useState('ALL');
 
     const navigate = useNavigate();
+
+    // Route Guard: Cegah ADMIN mengakses Dashboard User
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user.role === 'ADMIN') {
+                    navigate('/login?message=unauthorized');
+                    return;
+                }
+            } catch (e) {
+                // Abaikan jika parsing gagal
+            }
+        }
+    }, [navigate]);
 
     const fetchDashboardData = async () => {
         try {
@@ -50,7 +69,7 @@ export default function UserDashboard() {
             const catList = categoriesRes.data || categoriesRes.categories || categoriesRes;
             setCategories(Array.isArray(catList) ? catList : []);
         } catch (err) {
-            setError(err.message || 'Gagal memuat data dashboard');
+            toast.error(err.message || 'Gagal memuat data dashboard');
         } finally {
             setLoading(false);
         }
@@ -101,20 +120,19 @@ export default function UserDashboard() {
                     method: 'PUT',
                     body: JSON.stringify(payload),
                 });
-                setSuccessMessage('Task berhasil diperbarui');
+                toast.success('Task berhasil diperbarui!');
             } else {
                 await apiRequest('/tasks', {
                     method: 'POST',
                     body: JSON.stringify(payload),
                 });
-                setSuccessMessage('Task baru berhasil ditambahkan');
+                toast.success('Task baru berhasil ditambahkan!');
             }
 
             setIsModalOpen(false);
             fetchDashboardData();
-            setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
-            setError(err.message || 'Gagal menyimpan task');
+            toast.error(err.message || 'Gagal menyimpan task');
         }
     };
 
@@ -124,11 +142,10 @@ export default function UserDashboard() {
             await apiRequest(`/tasks/${taskId}`, {
                 method: 'DELETE',
             });
-            setSuccessMessage('Task berhasil dihapus');
+            toast.success('Task berhasil dihapus');
             fetchDashboardData();
-            setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
-            setError(err.message || 'Gagal menghapus task');
+            toast.error(err.message || 'Gagal menghapus task');
         }
     };
 
@@ -136,6 +153,18 @@ export default function UserDashboard() {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         navigate('/login');
+    };
+
+    // Data untuk Chart / Grafik Lingkaran
+    const chartData = {
+        labels: ['Todo', 'In Progress', 'Done'],
+        datasets: [
+            {
+                data: [stats.todo, stats.in_progress, stats.done],
+                backgroundColor: ['#FBBF24', '#C084FC', '#4ADE80'],
+                borderWidth: 0,
+            },
+        ],
     };
 
     // Filtered Tasks
@@ -147,6 +176,8 @@ export default function UserDashboard() {
 
     return (
         <div className="min-h-screen bg-[#F7F5F0] p-6 font-sans">
+            <Toaster position="top-right" />
+
             {/* Header */}
             <header className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm mb-6 border border-gray-100">
                 <div>
@@ -159,37 +190,44 @@ export default function UserDashboard() {
                 </button>
             </header>
 
-            {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm font-medium">{error}</div>}
-            {successMessage && <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-600 rounded-2xl text-sm font-medium">{successMessage}</div>}
+            {/* Stats Bento Grid & Chart Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                        <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><LayoutDashboard size={24} /></div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">Total Task</p>
+                            <h3 className="text-2xl font-extrabold text-gray-900">{stats.total}</h3>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                        <div className="p-4 bg-yellow-50 text-yellow-600 rounded-2xl"><Clock size={24} /></div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">Todo</p>
+                            <h3 className="text-2xl font-extrabold text-gray-900">{stats.todo}</h3>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                        <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl"><AlertCircle size={24} /></div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">In Progress</p>
+                            <h3 className="text-2xl font-extrabold text-gray-900">{stats.in_progress}</h3>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                        <div className="p-4 bg-green-50 text-green-600 rounded-2xl"><CheckSquare size={24} /></div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">Done</p>
+                            <h3 className="text-2xl font-extrabold text-gray-900">{stats.done}</h3>
+                        </div>
+                    </div>
+                </div>
 
-            {/* Stats Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-                    <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><LayoutDashboard size={24} /></div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase">Total Task</p>
-                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.total}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-                    <div className="p-4 bg-yellow-50 text-yellow-600 rounded-2xl"><Clock size={24} /></div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase">Todo</p>
-                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.todo}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-                    <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl"><AlertCircle size={24} /></div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase">In Progress</p>
-                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.in_progress}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-                    <div className="p-4 bg-green-50 text-green-600 rounded-2xl"><CheckSquare size={24} /></div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase">Done</p>
-                        <h3 className="text-2xl font-extrabold text-gray-900">{stats.done}</h3>
+                {/* Grafik Persentase Status Task */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-wider">Statistik Penyelesaian</h3>
+                    <div className="w-40 h-40">
+                        <Doughnut data={chartData} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
                     </div>
                 </div>
             </div>

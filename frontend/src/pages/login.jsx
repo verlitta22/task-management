@@ -1,18 +1,30 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../services/api';
 import { LogIn, Lock, Mail } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+
+    // Menangkap pesan error dari URL (misal: akses ditolak karena salah role)
+    useEffect(() => {
+        const message = searchParams.get('message') || searchParams.get('error');
+        if (message) {
+            if (message === 'unauthorized') {
+                toast.error('Akses ditolak: Anda tidak memiliki izin untuk mengakses halaman tersebut.');
+            } else {
+                toast.error(decodeURIComponent(message));
+            }
+        }
+    }, [searchParams]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        setError('');
         setLoading(true);
 
         try {
@@ -23,6 +35,7 @@ export default function Login() {
 
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
+            toast.success('Login berhasil!');
 
             if (data.user.role === 'ADMIN') {
                 navigate('/admin/dashboard');
@@ -30,7 +43,7 @@ export default function Login() {
                 navigate('/dashboard');
             }
         } catch (err) {
-            setError(err.message || 'Email atau password salah');
+            toast.error(err.message || 'Email atau password salah');
         } finally {
             setLoading(false);
         }
@@ -38,6 +51,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center p-6 font-sans">
+            <Toaster position="top-right" />
             <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
                 <div className="text-center mb-8">
                     <div className="w-12 h-12 bg-black text-white rounded-2xl mx-auto flex items-center justify-center font-extrabold text-xl mb-4 shadow-md">
@@ -46,8 +60,6 @@ export default function Login() {
                     <h2 className="text-2xl font-extrabold text-gray-900">Task Management</h2>
                     <p className="text-sm text-gray-500 mt-1">Masuk ke akun personal atau admin Anda</p>
                 </div>
-
-                {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm font-medium">{error}</div>}
 
                 <form onSubmit={handleLogin} className="space-y-5">
                     <div>
@@ -71,6 +83,15 @@ export default function Login() {
                         <span>{loading ? 'Memproses...' : 'Masuk Sekarang'}</span>
                     </button>
                 </form>
+
+                <div className="text-center mt-6">
+                    <p className="text-sm text-gray-500">
+                        Belum punya akun?{' '}
+                        <Link to="/register" className="text-black font-bold hover:underline">
+                            Daftar di sini
+                        </Link>
+                    </p>
+                </div>
             </div>
         </div>
     );

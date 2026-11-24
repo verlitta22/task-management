@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/login';
 import Register from './pages/register';
 import UserDashboard from './pages/user-dashboard';
 import AdminDashboard from './pages/admin-dashboard';
 
-// Komponen ProtectedRoute yang lebih aman dan presisi
+// Komponen ProtectedRoute menggunakan useEffect agar alert pasti muncul
 function ProtectedRoute({ children, role }) {
     const token = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
@@ -19,18 +19,23 @@ function ProtectedRoute({ children, role }) {
     try {
         user = JSON.parse(userStr);
     } catch (e) {
-        // Jika data user korup, bersihkan storage dan ke login
         localStorage.clear();
         return <Navigate to="/login" replace />;
     }
 
-    // Jika rute membutuhkan role tertentu dan role user tidak sesuai
-    if (role && user.role !== role) {
-        if (user.role === 'ADMIN') {
-            return <Navigate to="/admin/dashboard" replace />;
-        } else {
-            return <Navigate to="/dashboard" replace />;
+    // Pengecekan role menggunakan useEffect
+    const isUnauthorized = role && user.role !== role;
+
+    useEffect(() => {
+        if (isUnauthorized) {
+            localStorage.clear();
+            window.alert("Akses ditolak: Role Anda tidak diizinkan masuk ke halaman ini.");
+            window.location.href = "/login";
         }
+    }, [isUnauthorized]);
+
+    if (isUnauthorized) {
+        return null; // Tampilkan kosong sejenak saat alert diproses
     }
 
     return children;

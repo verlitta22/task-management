@@ -11,7 +11,7 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// Konfigurasi CORS agar frontend (Port 5173 / 5174) bisa mengakses backend
+	// Konfigurasi CORS agar frontend bisa mengakses backend
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:5174"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -61,6 +61,7 @@ func SetupRouter() *gin.Engine {
 				adminGroup.GET("/tasks", handler.GetAdminTasks)
 				adminGroup.GET("/tasks/:id", handler.GetAdminTaskByID)
 				adminGroup.GET("/tasks/export", handler.ExportAdminTasksCSV)
+				adminGroup.DELETE("/tasks/:id", handler.AdminDeleteTask) // Endpoint moderasi hapus task oleh admin
 			}
 		}
 	}

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../services/api';
-import { Users, Shield, CheckSquare, Clock, LogOut, Search, Download } from 'lucide-react';
+import { Users, Shield, CheckSquare, Clock, LogOut, Search, Download, Trash2 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({ total_users: 0, active_users: 0, inactive_users: 0, admin_count: 0, total_tasks: 0, status_summary: { TODO: 0, IN_PROGRESS: 0, DONE: 0 } });
@@ -10,8 +11,6 @@ export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('users'); // 'users' atau 'tasks'
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
 
     // State tambahan untuk Pagination & Search Task di Admin
     const [taskPage, setTaskPage] = useState(1);
@@ -19,6 +18,24 @@ export default function AdminDashboard() {
     const [taskSearch, setTaskSearch] = useState('');
 
     const navigate = useNavigate();
+
+    // Route Guard: Cegah non-admin mengakses Dashboard Admin secara case-insensitive
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (!userStr) {
+            navigate('/login?message=unauthorized');
+            return;
+        }
+        try {
+            const user = JSON.parse(userStr);
+            const userRole = (user.role || '').toUpperCase();
+            if (userRole !== 'ADMIN') {
+                navigate('/login?message=unauthorized');
+            }
+        } catch (e) {
+            navigate('/login?message=unauthorized');
+        }
+    }, [navigate]);
 
     const fetchAdminData = async () => {
         try {
@@ -29,7 +46,7 @@ export default function AdminDashboard() {
             setStats(dashboardRes.stats || stats);
             setUsers(usersRes.data || []);
         } catch (err) {
-            setError(err.message || 'Gagal memuat data admin');
+            toast.error(err.message || 'Gagal memuat data admin');
         } finally {
             setLoading(false);
         }
@@ -43,7 +60,7 @@ export default function AdminDashboard() {
             setTaskTotalPages(tasksRes.total_pages || 1);
             setTaskPage(tasksRes.page || 1);
         } catch (err) {
-            setError(err.message || 'Gagal memuat monitoring task');
+            toast.error(err.message || 'Gagal memuat monitoring task');
         } finally {
             setLoading(false);
         }
@@ -65,11 +82,10 @@ export default function AdminDashboard() {
                 method: 'PATCH',
                 body: JSON.stringify({ is_active: !currentStatus })
             });
-            setSuccessMessage('Status akun berhasil diubah');
+            toast.success('Status akun berhasil diubah');
             fetchAdminData();
-            setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
-            setError(err.message);
+            toast.error(err.message);
         }
     };
 
@@ -82,11 +98,23 @@ export default function AdminDashboard() {
                 method: 'PATCH',
                 body: JSON.stringify({ role: newRole })
             });
-            setSuccessMessage('Role user berhasil diubah');
+            toast.success('Role user berhasil diubah');
             fetchAdminData();
-            setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
-            setError(err.message);
+            toast.error(err.message);
+        }
+    };
+
+    const handleAdminDeleteTask = async (taskId) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus task user ini karena melanggar aturan?')) return;
+        try {
+            await apiRequest(`/admin/tasks/${taskId}`, {
+                method: 'DELETE',
+            });
+            toast.success('Task berhasil dihapus oleh admin');
+            fetchAdminTasks(taskPage, taskSearch);
+        } catch (err) {
+            toast.error(err.message || 'Gagal menghapus task');
         }
     };
 
@@ -113,8 +141,9 @@ export default function AdminDashboard() {
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
+            toast.success('Laporan CSV berhasil diunduh');
         } catch (err) {
-            setError(err.message || 'Gagal mengunduh laporan CSV');
+            toast.error(err.message || 'Gagal mengunduh laporan CSV');
         }
     };
 
@@ -128,6 +157,8 @@ export default function AdminDashboard() {
 
     return (
         <div className="min-h-screen bg-[#F7F5F0] p-6 font-sans">
+            <Toaster position="top-right" />
+
             {/* Header */}
             <header className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm mb-6 border border-gray-100">
                 <div>
@@ -139,9 +170,6 @@ export default function AdminDashboard() {
                     <span>Keluar</span>
                 </button>
             </header>
-
-            {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm font-medium">{error}</div>}
-            {successMessage && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-600 rounded-2xl text-sm font-medium">{successMessage}</div>}
 
             {/* Global Stats Bento Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -313,6 +341,13 @@ export default function AdminDashboard() {
                                                 }`}>
                                                     {t.status}
                                                 </span>
+                                                <button 
+                                                    onClick={() => handleAdminDeleteTask(t.id)}
+                                                    className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl transition"
+                                                    title="Hapus Task (Moderasi Admin)"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
