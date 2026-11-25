@@ -12,7 +12,8 @@ func NewCategoryRepository() *CategoryRepository {
 }
 
 func (r *CategoryRepository) GetCategoriesByUserID(userID int) ([]model.Category, error) {
-	rows, err := config.DB.Query("SELECT id, name, created_at, updated_at FROM categories WHERE user_id = ? ORDER BY created_at DESC", userID)
+	// Diperbarui agar user_id ikut di-select dari database
+	rows, err := config.DB.Query("SELECT id, user_id, name, created_at, updated_at FROM categories WHERE user_id = ? ORDER BY created_at DESC", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -21,10 +22,9 @@ func (r *CategoryRepository) GetCategoriesByUserID(userID int) ([]model.Category
 	var categories []model.Category
 	for rows.Next() {
 		var cat model.Category
-		if err := rows.Scan(&cat.ID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt); err != nil {
+		if err := rows.Scan(&cat.ID, &cat.UserID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt); err != nil {
 			continue
 		}
-		cat.UserID = userID
 		categories = append(categories, cat)
 	}
 	return categories, rows.Err()
@@ -32,12 +32,11 @@ func (r *CategoryRepository) GetCategoriesByUserID(userID int) ([]model.Category
 
 func (r *CategoryRepository) GetCategoryByIDAndUser(catID, userID int) (model.Category, error) {
 	var cat model.Category
-	err := config.DB.QueryRow("SELECT id, name, created_at, updated_at FROM categories WHERE id = ? AND user_id = ?", catID, userID).
-		Scan(&cat.ID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt)
+	err := config.DB.QueryRow("SELECT id, user_id, name, created_at, updated_at FROM categories WHERE id = ? AND user_id = ?", catID, userID).
+		Scan(&cat.ID, &cat.UserID, &cat.Name, &cat.CreatedAt, &cat.UpdatedAt)
 	if err != nil {
 		return cat, err
 	}
-	cat.UserID = userID
 	return cat, nil
 }
 
