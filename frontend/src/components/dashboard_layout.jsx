@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }) {
                         </div>
                         <div>
                             <h1 className="text-lg font-black tracking-tight text-white leading-none">
-                                TaskFlow <span className="text-[10px] text-emerald-400 font-bold">v2</span>
+                                TaskFlow <span className="text-[10px] text-emerald-400 font-bold"></span>
                             </h1>
                             <span className="text-[10px] text-gray-500 font-medium">Workspace</span>
                         </div>
