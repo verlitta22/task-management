@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../services/api';
 import DashboardLayout from '../../components/dashboard_layout';
-import { LayoutDashboard, CheckSquare, Clock, AlertCircle, Plus, Calendar, Edit, Trash2, ArrowUpRight, FolderPlus } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Clock, AlertCircle, Plus, Calendar, Edit, Trash2, ArrowUpRight, FolderPlus, X } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import toast, { Toaster } from 'react-hot-toast';
@@ -26,8 +26,8 @@ export default function UserDashboard() {
     const [categoryId, setCategoryId] = useState('');
     const [dueDate, setDueDate] = useState('');
 
-    // State untuk Modal Tambah Kategori Pribadi
-    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    // State untuk Opsi Tambah Kategori secara Inline (di dalam modal task yang sama)
+    const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [savingCategory, setSavingCategory] = useState(false);
 
@@ -68,9 +68,8 @@ export default function UserDashboard() {
         fetchDashboardData();
     }, []);
 
-    // Tambah Kategori Baru Khusus User Ini
-    const handleCreateCategory = async (e) => {
-        e.preventDefault();
+    // Fungsi Tambah Kategori Baru secara Inline di dalam Modal
+    const handleInlineCreateCategory = async () => {
         if (!newCategoryName.trim()) return;
 
         try {
@@ -79,15 +78,16 @@ export default function UserDashboard() {
                 method: 'POST',
                 body: JSON.stringify({ name: newCategoryName.trim() }),
             });
-            toast.success('Kategori pribadi berhasil ditambahkan!');
-            setNewCategoryName('');
-            setIsCategoryModalOpen(false);
+            toast.success('Kategori baru berhasil ditambahkan!');
             
             await fetchDashboardData();
             const created = res.data || res.category || res;
             if (created && created.id) {
                 setCategoryId(String(created.id));
             }
+            
+            setNewCategoryName('');
+            setShowNewCategoryInput(false);
         } catch (err) {
             toast.error(err.message || 'Gagal menambahkan kategori');
         } finally {
@@ -104,6 +104,8 @@ export default function UserDashboard() {
         setStatus('TODO');
         setCategoryId('');
         setDueDate('');
+        setShowNewCategoryInput(false);
+        setNewCategoryName('');
         setIsModalOpen(true);
     };
 
@@ -116,6 +118,8 @@ export default function UserDashboard() {
         setStatus(task.status || 'TODO');
         setCategoryId(task.category_id ? String(task.category_id) : '');
         setDueDate(task.due_date ? task.due_date.substring(0, 10) : '');
+        setShowNewCategoryInput(false);
+        setNewCategoryName('');
         setIsModalOpen(true);
     };
 
@@ -281,16 +285,8 @@ export default function UserDashboard() {
                         </select>
 
                         <button 
-                            onClick={() => setIsCategoryModalOpen(true)}
-                            className="flex items-center space-x-1.5 px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-800 border border-gray-200 rounded-2xl font-bold text-xs transition shadow-xs"
-                        >
-                            <FolderPlus size={15} />
-                            <span>+ Kategori</span>
-                        </button>
-
-                        <button 
                             onClick={handleOpenCreateModal}
-                            className="flex items-center space-x-1.5 px-5 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-2xl font-bold text-xs hover:shadow-lg transition shadow-md"
+                            className="flex items-center space-x-1.5 px-5 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-2xl font-bold text-xs hover:shadow-lg transition shadow-md cursor-pointer"
                         >
                             <Plus size={15} />
                             <span>Tambah Task</span>
@@ -343,14 +339,14 @@ export default function UserDashboard() {
                                             </span>
                                             <button 
                                                 onClick={() => handleOpenEditModal(task)}
-                                                className="p-2.5 bg-white hover:bg-black hover:text-white text-gray-700 rounded-xl transition shadow-xs border border-gray-200"
+                                                className="p-2.5 bg-white hover:bg-black hover:text-white text-gray-700 rounded-xl transition shadow-xs border border-gray-200 cursor-pointer"
                                                 title="Edit Task"
                                             >
                                                 <Edit size={15} />
                                             </button>
                                             <button 
                                                 onClick={() => handleDeleteTask(task.id)}
-                                                className="p-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition border border-red-200/50"
+                                                className="p-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition border border-red-200/50 cursor-pointer"
                                                 title="Hapus Task"
                                             >
                                                 <Trash2 size={15} />
@@ -368,14 +364,14 @@ export default function UserDashboard() {
                                 <button 
                                     disabled={currentPage <= 1}
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    className="px-4 py-2 bg-white text-gray-700 rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-gray-100 transition border border-gray-200"
+                                    className="px-4 py-2 bg-white text-gray-700 rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-gray-100 transition border border-gray-200 cursor-pointer"
                                 >
                                     Sebelumnya
                                 </button>
                                 <button 
                                     disabled={currentPage >= totalPages}
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-gray-800 transition shadow-sm"
+                                    className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-gray-800 transition shadow-sm cursor-pointer"
                                 >
                                     Selanjutnya
                                 </button>
@@ -385,49 +381,10 @@ export default function UserDashboard() {
                 )}
             </div>
 
-            {/* Modal Tambah Kategori Pribadi */}
-            {isCategoryModalOpen && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-7 max-w-sm w-full shadow-2xl border border-white">
-                        <h3 className="text-lg font-black text-gray-900 mb-1">Kategori Baru</h3>
-                        <p className="text-xs text-gray-500 mb-5">Kategori ini hanya akan muncul di akun Anda.</p>
-                        <form onSubmit={handleCreateCategory} className="space-y-4">
-                            <div>
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-400 mb-2">Nama Kategori</label>
-                                <input 
-                                    type="text" 
-                                    required 
-                                    value={newCategoryName} 
-                                    onChange={(e) => setNewCategoryName(e.target.value)} 
-                                    placeholder="Misal: Kuliah, Freelance, Skripsi" 
-                                    className="w-full px-4 py-3 bg-white rounded-2xl text-xs font-medium border border-gray-200 focus:border-black outline-none transition shadow-inner" 
-                                />
-                            </div>
-                            <div className="flex space-x-3 pt-2">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsCategoryModalOpen(false)}
-                                    className="w-1/2 py-2.5 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs hover:bg-gray-200 transition"
-                                >
-                                    Batal
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={savingCategory}
-                                    className="w-1/2 py-2.5 bg-black text-white rounded-2xl font-bold text-xs hover:bg-gray-800 transition shadow-md disabled:opacity-50"
-                                >
-                                    {savingCategory ? 'Menyimpan...' : 'Simpan'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Tambah / Edit Task */}
+            {/* Modal Tambah / Edit Task (Dengan Opsi Tambah Kategori Inline) */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-black text-gray-900 mb-6 tracking-tight">
                             {isEditMode ? 'Edit Task' : 'Tambah Task Baru'}
                         </h3>
@@ -478,28 +435,67 @@ export default function UserDashboard() {
                                     </select>
                                 </div>
                             </div>
+
+                            {/* KATEGORI SECTION DENGAN EXPAND INLINE */}
                             <div>
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-400">Kategori</label>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsCategoryModalOpen(true)} 
-                                        className="text-[11px] font-bold text-blue-600 hover:underline"
-                                    >
-                                        + Buat Kategori Baru
-                                    </button>
+                                    {!showNewCategoryInput && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowNewCategoryInput(true)} 
+                                            className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                                        >
+                                            + Buat Kategori Baru
+                                        </button>
+                                    )}
                                 </div>
-                                <select 
-                                    value={categoryId} 
-                                    onChange={(e) => setCategoryId(e.target.value)}
-                                    className="w-full px-4 py-3 bg-white rounded-2xl text-xs font-bold text-gray-700 border border-gray-200 focus:border-black outline-none transition"
-                                >
-                                    <option value="">Tanpa Kategori</option>
-                                    {categories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
+
+                                {!showNewCategoryInput ? (
+                                    <select 
+                                        value={categoryId} 
+                                        onChange={(e) => setCategoryId(e.target.value)}
+                                        className="w-full px-4 py-3 bg-white rounded-2xl text-xs font-bold text-gray-700 border border-gray-200 focus:border-black outline-none transition"
+                                    >
+                                        <option value="">Tanpa Kategori</option>
+                                        {categories.map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-2xl space-y-2 animate-in fade-in duration-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[11px] font-extrabold text-blue-900">Nama Kategori Baru</span>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowNewCategoryInput(false)}
+                                                className="text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                                                title="Tutup"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <input 
+                                                type="text" 
+                                                value={newCategoryName} 
+                                                onChange={(e) => setNewCategoryName(e.target.value)} 
+                                                placeholder="Contoh: Kuliah, Pribadi" 
+                                                className="flex-1 px-3 py-2 bg-white rounded-xl text-xs font-medium border border-blue-200 focus:border-black outline-none shadow-inner"
+                                            />
+                                            <button 
+                                                type="button"
+                                                disabled={savingCategory}
+                                                onClick={handleInlineCreateCategory}
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                                            >
+                                                {savingCategory ? '...' : 'Tambah'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
                             <div>
                                 <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-400 mb-2">Tenggat Waktu (Due Date)</label>
                                 <input 
@@ -509,17 +505,18 @@ export default function UserDashboard() {
                                     className="w-full px-4 py-3 bg-white rounded-2xl text-xs font-bold text-gray-700 border border-gray-200 focus:border-black outline-none transition" 
                                 />
                             </div>
+
                             <div className="flex space-x-3 pt-4">
                                 <button 
                                     type="button" 
                                     onClick={() => setIsModalOpen(false)}
-                                    className="w-1/2 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs hover:bg-gray-200 transition"
+                                    className="w-1/2 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs hover:bg-gray-200 transition cursor-pointer"
                                 >
                                     Batal
                                 </button>
                                 <button 
                                     type="submit" 
-                                    className="w-1/2 py-3 bg-black text-white rounded-2xl font-bold text-xs hover:bg-gray-800 transition shadow-md"
+                                    className="w-1/2 py-3 bg-black text-white rounded-2xl font-bold text-xs hover:bg-gray-800 transition shadow-md cursor-pointer"
                                 >
                                     {isEditMode ? 'Perbarui' : 'Simpan'}
                                 </button>
