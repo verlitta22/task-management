@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../services/api';
-import { LogIn, Lock, Mail, CheckCircle2 } from 'lucide-react';
+import { LogIn, Lock, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
-import logoImage from '../assets/logo.png'; // <-- Impor logo dari folder src/assets
+import logoImage from '../assets/logo.png';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -12,13 +12,39 @@ export default function Login() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
+    // Helper Toast Notifikasi Kustom (Glassmorphism)
+    const notify = {
+        success: (msg) => toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-2xl pointer-events-none flex ring-1 ring-black/5 p-4 items-center space-x-3 border border-emerald-100`}>
+                <div className="shrink-0 bg-emerald-100 text-emerald-600 p-2 rounded-xl">
+                    <CheckCircle2 size={18} />
+                </div>
+                <div className="flex-1">
+                    <p className="text-xs font-black text-gray-900">Berhasil</p>
+                    <p className="text-xs text-gray-500 font-medium">{msg}</p>
+                </div>
+            </div>
+        )),
+        error: (msg) => toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-2xl pointer-events-none flex ring-1 ring-black/5 p-4 items-center space-x-3 border border-red-100`}>
+                <div className="shrink-0 bg-red-100 text-red-600 p-2 rounded-xl">
+                    <AlertCircle size={18} />
+                </div>
+                <div className="flex-1">
+                    <p className="text-xs font-black text-gray-900">Gagal Masuk</p>
+                    <p className="text-xs text-gray-500 font-medium">{msg}</p>
+                </div>
+            </div>
+        )),
+    };
+
     useEffect(() => {
         const message = searchParams.get('message') || searchParams.get('error');
         if (message) {
             if (message === 'unauthorized') {
-                toast.error('Akses ditolak: Anda tidak memiliki izin untuk mengakses halaman tersebut.');
+                notify.error('Akses ditolak: Anda tidak memiliki izin untuk mengakses halaman tersebut.');
             } else {
-                toast.error(decodeURIComponent(message));
+                notify.error(decodeURIComponent(message));
             }
         }
     }, [searchParams]);
@@ -35,7 +61,7 @@ export default function Login() {
 
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
-            toast.success('Login berhasil!');
+            notify.success('Login berhasil! Mengalihkan ke dashboard...');
 
             if (data.user.role === 'ADMIN') {
                 navigate('/admin/dashboard');
@@ -43,7 +69,9 @@ export default function Login() {
                 navigate('/dashboard');
             }
         } catch (err) {
-            toast.error(err.message || 'Email atau password salah');
+            // Menampilkan notifikasi error & membersihkan field password
+            notify.error(err.message || 'Email atau password yang Anda masukkan salah.');
+            setPassword('');
         } finally {
             setLoading(false);
         }
@@ -51,7 +79,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-gradient-to-tr from-[#d9e7ff] via-[#eef2f7] to-[#d4f8e8] flex items-center justify-center p-6 font-sans antialiased text-gray-800 relative overflow-hidden">
-            <Toaster position="top-right" />
+            <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
 
             {/* Efek Lingkaran Gradasi Latar Belakang */}
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-300/30 rounded-full blur-3xl pointer-events-none"></div>
@@ -62,7 +90,6 @@ export default function Login() {
                 
                 {/* Left Side: Branding & Info */}
                 <div className="space-y-6">
-                    {/* Logo Gambar yang Diimpor dari src/assets */}
                     <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 overflow-hidden bg-white">
                         <img src={logoImage} alt="Logo" className="w-full h-full object-cover" />
                     </div>
@@ -129,7 +156,7 @@ export default function Login() {
                         <button 
                             type="submit" 
                             disabled={loading} 
-                            className="w-full py-3.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-2xl font-bold hover:shadow-lg transition shadow-md flex items-center justify-center space-x-2 text-xs mt-4 disabled:opacity-50"
+                            className="w-full py-3.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-2xl font-bold hover:shadow-lg transition shadow-md flex items-center justify-center space-x-2 text-xs mt-4 disabled:opacity-50 cursor-pointer"
                         >
                             <LogIn size={16} />
                             <span>{loading ? 'Memproses...' : 'LOGIN'}</span>
